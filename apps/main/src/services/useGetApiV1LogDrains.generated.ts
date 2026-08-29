@@ -1,0 +1,418 @@
+import { z } from "zod";
+import { useQuery, queryOptions } from "@tanstack/react-query";
+import { apiFetch, buildUrl } from "@/lib/api/client";
+
+export type UseGetApiV1LogDrainsArgs = {
+  projectId?: string | undefined;
+  projectIdOrName?: string | undefined;
+  includeMetadata?: boolean | undefined;
+  teamId?: string | undefined;
+  slug?: string | undefined;
+};
+
+export const useGetApiV1LogDrainsResponse = z.union([
+  z.array(
+    z.object({
+      createdFrom: z.string(),
+      clientId: z.string().optional(),
+      configurationId: z.string().optional(),
+      projectsMetadata: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            framework: z
+              .enum([
+                "actix-web",
+                "angular",
+                "ash",
+                "astro",
+                "axum",
+                "blitzjs",
+                "brunch",
+                "bun",
+                "container",
+                "create-react-app",
+                "django",
+                "docusaurus",
+                "docusaurus-2",
+                "dojo",
+                "eleventy",
+                "elysia",
+                "ember",
+                "eve",
+                "express",
+                "fastapi",
+                "fasthtml",
+                "fastify",
+                "flask",
+                "gatsby",
+                "go",
+                "gridsome",
+                "h3",
+                "hexo",
+                "hono",
+                "hugo",
+                "hydrogen",
+                "ionic-angular",
+                "ionic-react",
+                "jekyll",
+                "koa",
+                "mastra",
+                "middleman",
+                "nestjs",
+                "nextjs",
+                "nitro",
+                "node",
+                "nuxtjs",
+                "parcel",
+                "polymer",
+                "preact",
+                "python",
+                "react-router",
+                "redwoodjs",
+                "remix",
+                "ruby",
+                "rust",
+                "saber",
+                "sanity",
+                "sanity-v2",
+                "sapper",
+                "scully",
+                "services",
+                "solidstart",
+                "solidstart-1",
+                "stencil",
+                "storybook",
+                "svelte",
+                "sveltekit",
+                "sveltekit-1",
+                "tanstack-start",
+                "tanstack-start-lovable",
+                "umijs",
+                "vite",
+                "vitepress",
+                "vue",
+                "vuepress",
+                "xmcp",
+                "zola",
+                "null",
+              ])
+              .nullable()
+              .optional(),
+            latestDeployment: z.string().optional(),
+          }),
+        )
+        .nullable()
+        .optional(),
+      integrationIcon: z.string().optional(),
+      integrationConfigurationUri: z.string().optional(),
+      integrationWebsite: z.string().optional(),
+    }),
+  ),
+  z.object({
+    drains: z.union([
+      z.array(
+        z.object({
+          id: z.string(),
+          createdAt: z.number(),
+          updatedAt: z.number(),
+          projectIds: z.array(z.string()).optional(),
+          name: z.string(),
+          teamId: z.string().nullable().optional(),
+          ownerId: z.string(),
+          status: z.enum(["disabled", "enabled", "errored"]).optional(),
+          firstErrorTimestamp: z.number().optional(),
+          disabledAt: z.number().optional(),
+          disabledBy: z.string().optional(),
+          disabledReason: z
+            .enum([
+              "account-plan-downgrade",
+              "disabled-by-admin",
+              "disabled-by-owner",
+              "feature-not-available",
+              "limits-exceeded",
+            ])
+            .optional(),
+          schemas: z.object({
+            log: z.object({}).optional(),
+            trace: z.object({}).optional(),
+            analytics: z.object({}).optional(),
+            speed_insights: z.object({}).optional(),
+            ai_gateway: z.object({}).optional(),
+            audit_log: z.object({}).optional(),
+            connect: z.object({}).optional(),
+          }),
+          delivery: z.union([
+            z.object({
+              type: z.literal("http"),
+              endpoint: z.string(),
+              encoding: z.enum(["json", "ndjson"]),
+              compression: z.enum(["gzip", "none"]).optional(),
+              headers: z.record(z.string(), z.string()),
+              secret: z
+                .union([z.string(), z.object({ kind: z.literal("INTEGRATION_SECRET") })])
+                .optional(),
+            }),
+            z.object({
+              type: z.literal("otlphttp"),
+              endpoint: z.object({ traces: z.string() }),
+              encoding: z.enum(["json", "proto"]),
+              headers: z.record(z.string(), z.string()),
+              secret: z
+                .union([z.string(), z.object({ kind: z.literal("INTEGRATION_SECRET") })])
+                .optional(),
+            }),
+            z.object({ type: z.literal("clickhouse"), endpoint: z.string(), table: z.string() }),
+            z.object({
+              type: z.literal("s3"),
+              endpoint: z.string(),
+              encoding: z.enum(["json", "ndjson"]),
+              compression: z.literal("none"),
+              fileStructure: z.literal("hive"),
+              roleArn: z.string(),
+              region: z.string(),
+              serverSideEncryption: z.enum(["AES256", "aws:kms", "aws:kms:dsse"]).optional(),
+              objectAcl: z
+                .enum([
+                  "authenticated-read",
+                  "aws-exec-read",
+                  "bucket-owner-full-control",
+                  "bucket-owner-read",
+                  "private",
+                  "public-read",
+                  "public-read-write",
+                ])
+                .optional(),
+            }),
+            z.object({ type: z.literal("internal"), target: z.literal("vercel-otel-traces-db") }),
+          ]),
+          sampling: z
+            .array(
+              z.object({
+                type: z.literal("head_sampling"),
+                rate: z.number(),
+                env: z.enum(["preview", "production"]).optional(),
+                requestPath: z.string().optional(),
+              }),
+            )
+            .optional(),
+          source: z.union([
+            z.object({ kind: z.literal("self-served") }),
+            z.object({
+              kind: z.literal("integration"),
+              resourceId: z.string().optional(),
+              externalResourceId: z.string().optional(),
+              integrationId: z.string(),
+              integrationConfigurationId: z.string(),
+            }),
+          ]),
+          filterV2: z
+            .object({
+              version: z.literal("v2"),
+              filter: z.union([
+                z.object({
+                  type: z.literal("basic"),
+                  project: z.object({ ids: z.array(z.string()).optional() }).optional(),
+                  log: z
+                    .object({
+                      sources: z
+                        .array(
+                          z.enum([
+                            "build",
+                            "edge",
+                            "external",
+                            "firewall",
+                            "lambda",
+                            "redirect",
+                            "static",
+                          ]),
+                        )
+                        .optional(),
+                      legacy_excludeCachedStaticAssetLogs: z.boolean().optional(),
+                    })
+                    .optional(),
+                  deployment: z
+                    .object({ environments: z.array(z.enum(["preview", "production"])).optional() })
+                    .optional(),
+                }),
+                z.object({ type: z.literal("odata"), text: z.string() }),
+              ]),
+            })
+            .optional(),
+        }),
+      ),
+      z.array(
+        z.object({
+          id: z.string(),
+          createdAt: z.number(),
+          updatedAt: z.number(),
+          projectIds: z.array(z.string()).optional(),
+          name: z.string(),
+          teamId: z.string().nullable().optional(),
+          ownerId: z.string(),
+          status: z.enum(["disabled", "enabled", "errored"]).optional(),
+          firstErrorTimestamp: z.number().optional(),
+          disabledAt: z.number().optional(),
+          disabledBy: z.string().optional(),
+          disabledReason: z
+            .enum([
+              "account-plan-downgrade",
+              "disabled-by-admin",
+              "disabled-by-owner",
+              "feature-not-available",
+              "limits-exceeded",
+            ])
+            .optional(),
+          schemas: z.object({
+            log: z.object({}).optional(),
+            trace: z.object({}).optional(),
+            analytics: z.object({}).optional(),
+            speed_insights: z.object({}).optional(),
+            ai_gateway: z.object({}).optional(),
+            audit_log: z.object({}).optional(),
+            connect: z.object({}).optional(),
+          }),
+          delivery: z.union([
+            z.object({
+              type: z.literal("http"),
+              endpoint: z.string(),
+              encoding: z.enum(["json", "ndjson"]),
+              compression: z.enum(["gzip", "none"]).optional(),
+              headers: z.record(z.string(), z.string()),
+              secret: z
+                .union([z.string(), z.object({ kind: z.literal("INTEGRATION_SECRET") })])
+                .optional(),
+            }),
+            z.object({
+              type: z.literal("otlphttp"),
+              endpoint: z.object({ traces: z.string() }),
+              encoding: z.enum(["json", "proto"]),
+              headers: z.record(z.string(), z.string()),
+              secret: z
+                .union([z.string(), z.object({ kind: z.literal("INTEGRATION_SECRET") })])
+                .optional(),
+            }),
+            z.object({ type: z.literal("clickhouse"), endpoint: z.string(), table: z.string() }),
+            z.object({
+              type: z.literal("s3"),
+              endpoint: z.string(),
+              encoding: z.enum(["json", "ndjson"]),
+              compression: z.literal("none"),
+              fileStructure: z.literal("hive"),
+              roleArn: z.string(),
+              region: z.string(),
+              serverSideEncryption: z.enum(["AES256", "aws:kms", "aws:kms:dsse"]).optional(),
+              objectAcl: z
+                .enum([
+                  "authenticated-read",
+                  "aws-exec-read",
+                  "bucket-owner-full-control",
+                  "bucket-owner-read",
+                  "private",
+                  "public-read",
+                  "public-read-write",
+                ])
+                .optional(),
+            }),
+            z.object({ type: z.literal("internal"), target: z.literal("vercel-otel-traces-db") }),
+          ]),
+          sampling: z
+            .array(
+              z.object({
+                type: z.literal("head_sampling"),
+                rate: z.number(),
+                env: z.enum(["preview", "production"]).optional(),
+                requestPath: z.string().optional(),
+              }),
+            )
+            .optional(),
+          source: z.union([
+            z.object({ kind: z.literal("self-served") }),
+            z.object({
+              kind: z.literal("integration"),
+              resourceId: z.string().optional(),
+              externalResourceId: z.string().optional(),
+              integrationId: z.string(),
+              integrationConfigurationId: z.string(),
+            }),
+          ]),
+          filterV2: z
+            .object({
+              version: z.literal("v2"),
+              filter: z.union([
+                z.object({
+                  type: z.literal("basic"),
+                  project: z.object({ ids: z.array(z.string()).optional() }).optional(),
+                  log: z
+                    .object({
+                      sources: z
+                        .array(
+                          z.enum([
+                            "build",
+                            "edge",
+                            "external",
+                            "firewall",
+                            "lambda",
+                            "redirect",
+                            "static",
+                          ]),
+                        )
+                        .optional(),
+                      legacy_excludeCachedStaticAssetLogs: z.boolean().optional(),
+                    })
+                    .optional(),
+                  deployment: z
+                    .object({ environments: z.array(z.enum(["preview", "production"])).optional() })
+                    .optional(),
+                }),
+                z.object({ type: z.literal("odata"), text: z.string() }),
+              ]),
+            })
+            .optional(),
+          integrationIcon: z.string().optional(),
+          integrationConfigurationUri: z.string().optional(),
+          integrationWebsite: z.string().optional(),
+          projectAccess: z
+            .union([
+              z.object({ access: z.literal("all"), managedBy: z.enum(["drain", "integration"]) }),
+              z.object({
+                access: z.literal("some"),
+                projectIds: z.array(z.string()),
+                managedBy: z.enum(["drain", "integration"]),
+              }),
+            ])
+            .optional(),
+        }),
+      ),
+    ]),
+  }),
+]);
+
+export const getApiV1LogDrainsQueryOptions = (args: UseGetApiV1LogDrainsArgs) =>
+  queryOptions({
+    queryKey: [
+      "GET /v1/log-drains",
+      "logDrains",
+      args.projectId,
+      args.projectIdOrName,
+      args.includeMetadata,
+      args.teamId,
+      args.slug,
+    ],
+    queryFn: () =>
+      apiFetch(
+        buildUrl("/v1/log-drains", {
+          projectId: args.projectId,
+          projectIdOrName: args.projectIdOrName,
+          includeMetadata: args.includeMetadata,
+          teamId: args.teamId,
+          slug: args.slug,
+        }),
+        useGetApiV1LogDrainsResponse,
+        { method: "GET" },
+      ),
+  });
+
+export const useGetApiV1LogDrains = (args: UseGetApiV1LogDrainsArgs) =>
+  useQuery(getApiV1LogDrainsQueryOptions(args));
